@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>家庭物资管理</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>" />
+</head>
+<body>
+  <header class="topbar app-only">
+    <div class="brand">
+      <span class="brand-icon">📦</span>
+      <div>
+        <h1>家庭物资管理</h1>
+        <span class="sub" id="stats-line">加载中…</span>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <div class="search-group">
+        <div class="input-clear search-clear">
+          <input id="search" type="search" placeholder="搜索名称、描述、位置、条码或标签…" autocomplete="off" />
+          <button type="button" class="clear-btn" data-clear="search" hidden aria-label="清除搜索">×</button>
+        </div>
+        <button type="button" class="btn ghost" id="btn-scan-search" title="扫描条码 / 二维码搜索">📷 扫码</button>
+      </div>
+      <button id="btn-manage-locations" class="btn ghost" type="button">位置管理</button>
+      <button id="btn-import" class="btn ghost" type="button">⬆ 批量导入</button>
+      <button id="btn-select-mode" class="btn ghost" type="button">☑ 批量管理</button>
+      <span id="user-chip" class="user-chip hidden"></span>
+      <button id="btn-logout" class="btn ghost" type="button">退出登录</button>
+      <button id="btn-add" class="btn primary" type="button">＋ 新增物品</button>
+    </div>
+  </header>
+
+  <section class="toolbar app-only" id="toolbar">
+    <label class="field combobox">
+      <span>按位置筛选</span>
+      <div class="input-clear">
+        <input id="location-filter" type="text" list="location-options" placeholder="输入或选择位置（含子位置）" autocomplete="off" />
+        <button type="button" class="clear-btn" data-clear="location-filter" hidden aria-label="清除位置筛选">×</button>
+      </div>
+    </label>
+    <label class="field combobox">
+      <span>按标签筛选</span>
+      <div class="input-clear">
+        <input id="tag-filter" type="text" list="tag-options" placeholder="输入标签检索…" autocomplete="off" />
+        <button type="button" class="clear-btn" data-clear="tag-filter" hidden aria-label="清除标签筛选">×</button>
+      </div>
+    </label>
+    <div class="view-toggle" role="group" aria-label="显示方式">
+      <button type="button" id="view-grid" class="btn ghost active" title="缩略图网格">▦ 网格</button>
+      <button type="button" id="view-list" class="btn ghost" title="列表">☰ 列表</button>
+    </div>
+    <button type="button" id="btn-view-loc-image" class="btn ghost" hidden title="查看当前筛选位置的布局图">🗺️ 查看位置图</button>
+    <span class="result-count" id="result-count"></span>
+  </section>
+
+  <!-- 批量操作栏 -->
+  <section id="bulk-bar" class="bulk-bar hidden">
+    <label class="bulk-select-all"><input type="checkbox" id="bulk-select-all" /> 全选</label>
+    <span class="bulk-count" id="bulk-count">已选 0 件</span>
+    <span class="bulk-spacer"></span>
+    <button type="button" class="btn ghost" id="btn-print-qr">▦ 导出所选二维码</button>
+    <button type="button" class="btn danger-ghost" id="btn-bulk-delete">删除所选</button>
+    <button type="button" class="btn ghost" id="btn-exit-select">退出批量</button>
+  </section>
+
+  <main id="gallery" class="gallery grid-view app-only"></main>
+
+  <!-- 登录 / 注册全屏页 -->
+  <div id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <div class="auth-icon">📦</div>
+      <h1>家庭物资管理</h1>
+      <p class="auth-sub" id="auth-sub">请登录后使用</p>
+      <form id="auth-form" autocomplete="on">
+        <label class="field">
+          <span>用户名</span>
+          <input name="username" id="auth-username" type="text" required maxlength="30" autocomplete="username" placeholder="请输入用户名" />
+        </label>
+        <label class="field">
+          <span>密码</span>
+          <input name="password" id="auth-password" type="password" required maxlength="64" autocomplete="current-password" placeholder="请输入密码" />
+        </label>
+        <label class="field" id="auth-confirm-field" hidden>
+          <span>确认密码</span>
+          <input name="confirm" id="auth-confirm" type="password" maxlength="64" autocomplete="new-password" placeholder="再次输入密码" />
+        </label>
+        <p id="auth-error" class="auth-error" hidden></p>
+        <button type="submit" class="btn primary auth-submit" id="auth-submit">登录</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 物品表单弹窗 -->
+  <div id="item-modal" class="modal-backdrop hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="item-modal-title">新增物品</h2>
+        <button class="close" data-close="item-modal" type="button">×</button>
+      </div>
+      <form id="item-form" enctype="multipart/form-data">
+        <div class="form-grid">
+          <label class="field">
+            <span>物品名称 *</span>
+            <input name="name" type="text" required maxlength="100" placeholder="如：客厅路由器" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span>所在位置 *</span>
+            <input name="locationName" id="item-location" type="text" list="location-options" required placeholder="选择已有位置，或输入新的根位置" autocomplete="off" />
+            <input type="hidden" name="locationId" id="item-location-id" />
+          </label>
+          <label class="field">
+            <span>标签</span>
+            <input name="tags" type="text" maxlength="200" placeholder="逗号分隔，如：数码, 备用, 户外" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span>条码 / 编号</span>
+            <div class="barcode-row">
+              <input name="barcode" id="item-barcode" type="text" maxlength="60" placeholder="扫描或手动输入商品条码 / 编号" autocomplete="off" />
+              <button type="button" class="btn ghost" id="btn-scan">📷 扫码</button>
+            </div>
+          </label>
+          <label class="field field-qty">
+            <span>数量</span>
+            <input name="quantity" type="number" min="1" step="1" value="1" />
+          </label>
+          <label class="field">
+            <span>备注描述</span>
+            <textarea name="description" rows="3" maxlength="500" placeholder="品牌、型号、有效期、存放说明…"></textarea>
+          </label>
+          <div class="field">
+            <span>物品图片</span>
+            <div class="upload-row">
+              <label class="upload-pick">
+                <input type="file" name="image" id="item-image" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+                <span id="upload-pick-label">选择图片（≤10MB）</span>
+              </label>
+              <img id="image-preview" class="preview hidden" alt="图片预览" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn ghost" data-close="item-modal">取消</button>
+          <button type="submit" class="btn primary" id="item-submit">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 批量导入弹窗 -->
+  <div id="import-modal" class="modal-backdrop hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>批量导入物品</h2>
+        <button class="close" data-close="import-modal" type="button">×</button>
+      </div>
+      <form id="import-form">
+        <div class="form-grid">
+          <div class="field">
+            <span>CSV 文件（UTF-8 编码）</span>
+            <div class="upload-row">
+              <label class="upload-pick">
+                <input type="file" id="import-file" accept=".csv,.txt" hidden />
+                <span id="import-file-label">选择 CSV 文件</span>
+              </label>
+              <button type="button" class="btn ghost" id="btn-template">下载模板</button>
+            </div>
+          </div>
+          <p class="scan-hint">列顺序：名称、位置、标签、条码、数量、备注。位置可填完整路径（如：主卧 / 衣柜）；路径不存在时会自动新建根位置。标签多个用逗号分隔。</p>
+          <div id="import-result" class="import-result hidden"></div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn ghost" data-close="import-modal">取消</button>
+          <button type="submit" class="btn primary" id="import-submit">开始导入</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 二维码标签打印弹窗 -->
+  <div id="print-modal" class="modal-backdrop hidden">
+    <div class="modal modal-print">
+      <div class="modal-head">
+        <h2>二维码标签打印</h2>
+        <button class="close" data-close="print-modal" type="button">×</button>
+      </div>
+      <div class="print-body">
+        <p class="scan-hint">核对标签后点「打印 / 导出 PDF」；标签可裁剪后粘贴到对应物品或位置。</p>
+        <div id="print-sheet" class="print-sheet"></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn ghost" data-close="print-modal">关闭</button>
+        <button type="button" class="btn primary" id="btn-print">🖨️ 打印 / 导出 PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 扫码弹窗 -->
+  <div id="scan-modal" class="modal-backdrop hidden">
+    <div class="modal modal-scan">
+      <div class="modal-head">
+        <h2>扫码录入</h2>
+        <button class="close" data-close="scan-modal" type="button">×</button>
+      </div>
+      <div class="scan-body">
+        <video id="scan-video" playsinline muted></video>
+        <p class="scan-hint">将条码 / 二维码对准镜头，识别成功后自动填入表单。</p>
+        <p id="scan-status" class="scan-status"></p>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn ghost" data-close="scan-modal">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 二维码弹窗（物品 / 位置） -->
+  <div id="qr-modal" class="modal-backdrop hidden">
+    <div class="modal modal-qr">
+      <div class="modal-head">
+        <h2 id="qr-title">二维码</h2>
+        <button class="close" data-close="qr-modal" type="button">×</button>
+      </div>
+      <div class="scan-body">
+        <div class="qr-wrap">
+          <img id="qr-img" alt="二维码" />
+        </div>
+        <p id="qr-meta" class="scan-hint"></p>
+        <p id="qr-url" class="qr-url"></p>
+      </div>
+      <div class="modal-foot">
+        <a id="qr-download" class="btn ghost" download="qrcode.png" href="#">下载图片</a>
+        <button type="button" class="btn ghost" data-close="qr-modal">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 位置布局图预览弹窗 -->
+  <div id="image-modal" class="modal-backdrop hidden">
+    <div class="modal modal-image">
+      <div class="modal-head">
+        <h2>位置布局图</h2>
+        <button class="close" data-close="image-modal" type="button">×</button>
+      </div>
+      <div class="scan-body">
+        <img id="image-modal-img" class="modal-img" alt="位置布局图" />
+      </div>
+    </div>
+  </div>
+
+  <!-- 物品详情弹窗 -->
+  <div id="detail-modal" class="modal-backdrop hidden">
+    <div class="modal modal-detail">
+      <div class="modal-head">
+        <h2 id="detail-title">物品详情</h2>
+        <button class="close" data-close="detail-modal" type="button">×</button>
+      </div>
+      <div class="detail-body">
+        <img id="detail-img" class="detail-img hidden" alt="物品图片" />
+        <div class="detail-grid">
+          <div class="detail-item"><span class="detail-label">所在位置</span><span id="detail-location">—</span></div>
+          <div class="detail-item"><span class="detail-label">数量</span><span id="detail-quantity">—</span></div>
+          <div class="detail-item"><span class="detail-label">条码 / 编号</span><span id="detail-barcode">—</span></div>
+          <div class="detail-item"><span class="detail-label">标签</span><span id="detail-tags">—</span></div>
+          <div class="detail-item detail-full"><span class="detail-label">备注描述</span><span id="detail-description">—</span></div>
+          <div class="detail-item"><span class="detail-label">创建时间</span><span id="detail-created">—</span></div>
+          <div class="detail-item"><span class="detail-label">更新时间</span><span id="detail-updated">—</span></div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn ghost" id="detail-qr">▦ 二维码</button>
+        <button type="button" class="btn ghost" id="detail-edit">编辑</button>
+        <button type="button" class="btn primary" data-close="detail-modal">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 位置管理独立页面 -->
+  <section id="loc-page" class="loc-page hidden app-only">
+    <div class="loc-page-head">
+      <div>
+        <h2>位置管理</h2>
+        <span class="sub">上传布局图、维护层级位置与专属二维码</span>
+      </div>
+      <button type="button" id="btn-print-loc-qr" class="btn ghost">▦ 位置二维码</button>
+      <button type="button" id="btn-back-gallery" class="btn ghost">← 返回物品列表</button>
+    </div>
+    <form id="location-form" class="location-add">
+      <input name="name" id="location-name-input" type="text" required maxlength="50" placeholder="根位置名称，如：主卧" autocomplete="off" />
+      <button type="submit" class="btn primary">添加</button>
+    </form>
+    <input type="file" id="loc-image-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+    <ul id="location-list" class="location-list"></ul>
+  </section>
+
+  <!-- 共享补全选项 -->
+  <datalist id="location-options"></datalist>
+  <datalist id="tag-options"></datalist>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

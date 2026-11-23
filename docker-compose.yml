@@ -1,0 +1,14 @@
+services:
+  family-inventory:
+    image: family-inventory:1.0.0
+    container_name: family-inventory
+    restart: unless-stopped
+    ports:
+      # 左侧为 NAS 宿主端口，若被占用可改为 7745:8080 等；容器内端口固定 8080
+      - "8080:8080"
+    volumes:
+      # 数据库与上传图片持久化到 NAS 共享目录，左侧路径按实际共享文件夹调整
+      - ./data:/data
+    environment:
+      INV_DATA: /data
+      PORT: "8080"

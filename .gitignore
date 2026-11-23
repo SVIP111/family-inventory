@@ -1,0 +1,14 @@
+# 构建产物与打包暂存
+/dist/
+/family-inventory
+/inventory
+*.tar
+*.tar.gz
+
+# 运行数据与上传图片
+/data/
+/uploads/
+
+# 临时文件
+*.log
+*.tmp
