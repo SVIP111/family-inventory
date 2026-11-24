@@ -1,6 +1,6 @@
 services:
   family-inventory:
-    image: family-inventory:1.0.0
+    image: family-inventory:1.0.1
     container_name: family-inventory
     restart: unless-stopped
     ports:

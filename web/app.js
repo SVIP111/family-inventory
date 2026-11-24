@@ -21,6 +21,8 @@ const state = {
 let formTags = [];
 // 仪表盘汇总数据
 let summaryData = null;
+// 系统版本号（来自后端 /api/version）
+let appVersion = "";
 
 const $ = (id) => document.getElementById(id);
 
@@ -176,6 +178,22 @@ async function loadStats() {
     `共 ${stats.items} 件物品 · ${stats.locations} 个位置 · ${stats.withImage} 件已配图`;
 }
 
+// 拉取系统版本号；失败不影响主流程。
+async function loadVersion() {
+  try {
+    const data = await api("GET", "/api/version");
+    appVersion = (data && data.version) || "";
+    const badge = $("about-version");
+    if (badge) badge.textContent = appVersion ? "v" + appVersion : "版本未知";
+  } catch (_) { /* 版本号非关键信息，忽略 */ }
+}
+
+// 「关于」弹窗：展示应用名与版本号。
+async function openAbout() {
+  if (!appVersion) await loadVersion();
+  openModal("about-modal");
+}
+
 async function refreshAll() {
   await Promise.all([loadLocations(), loadTags(), loadItems(), loadStats()]);
 }
@@ -242,6 +260,14 @@ function currentFilterLocation() {
   if (!v) return null;
   if (state.byId[v]) return state.byId[v];
   return findByPath(v);
+}
+
+// 位置筛选框展示文本：优先按 ID 取完整路径，其次按路径反查，都未命中则原样返回。
+function locDisplayText(v) {
+  if (!v) return "";
+  if (state.byId[v]) return pathOf(v);
+  const loc = findByPath(v);
+  return loc ? pathOf(loc.id) : v;
 }
 
 // 仅当筛选位置已上传布局图时，显示「查看位置图」按钮。
@@ -624,9 +650,8 @@ function syncClearBtn(inputId) {
 }
 
 function applyLocationFilter(locId) {
-  const loc = state.byId[locId];
   state.filter.location = locId;
-  $("location-filter").value = loc ? pathOf(locId) : locId;
+  $("location-filter").value = locDisplayText(locId);
   syncClearBtn("location-filter");
   loadItems();
 }
@@ -1129,6 +1154,7 @@ document.querySelectorAll("[data-menu]").forEach((btn) => {
     else if (action === "import") openImportModal();
     else if (action === "select") { showPage("gallery"); setSelectMode(true); }
     else if (action === "tags") openTagManager();
+    else if (action === "about") openAbout();
     else if (action === "logout") logout();
   });
 });
@@ -1307,13 +1333,15 @@ function renderDashboard() {
   );
 }
 
-// 图例 / 柱状图点击：只更新对应维度（位置或标签），保留另一维度与关键字搜索；
-// 再次点击当前已生效的分片则取消该维度筛选。
+// 图例 / 柱状图点击：仪表盘跳转只按当前维度筛选；进入列表时清掉另一维度条件与关键字搜索词，
+// 不与既有条件组合；再次点击当前已生效的分片则取消该维度。
 function applyDashboardFilter(kind, name) {
   const isLoc = kind === "loc";
   const emptyLabel = isLoc ? "未分配位置" : "无标签";
   const filterKey = isLoc ? "location" : "tag";
+  const otherKey = isLoc ? "tag" : "location";
   const inputEl = $(isLoc ? "location-filter" : "tag-filter");
+  const otherInput = $(isLoc ? "tag-filter" : "location-filter");
 
   let next = "";
   if (name !== emptyLabel) {
@@ -1325,14 +1353,20 @@ function applyDashboardFilter(kind, name) {
     }
   }
 
+  // 不做组合筛选：清掉另一维度条件、关键字搜索词及其输入框。
+  state.filter[otherKey] = "";
+  otherInput.value = "";
+  syncClearBtn(isLoc ? "tag-filter" : "location-filter");
+  state.filter.q = "";
+  $("search").value = "";
+  syncClearBtn("search");
+
   if (next !== "" && state.filter[filterKey] === next) {
     state.filter[filterKey] = "";
     inputEl.value = "";
   } else {
     state.filter[filterKey] = next;
-    inputEl.value = next
-      ? (isLoc && findByPath(next) ? pathOf(next) : next)
-      : "";
+    inputEl.value = next ? (isLoc ? locDisplayText(next) : next) : "";
   }
   syncClearBtn(isLoc ? "location-filter" : "tag-filter");
   showPage("gallery");
@@ -1394,11 +1428,15 @@ function applyRouteParams() {
   if (itemId) openDetail(itemId);
 }
 
-// 启动：先校验登录态，已登录再加载数据
-bootAuth()
-  .then(async (ok) => {
+// 启动：先拉取版本号，再校验登录态，已登录再加载数据
+(async () => {
+  await loadVersion();
+  try {
+    const ok = await bootAuth();
     if (!ok) return;
     await refreshAll();
     applyRouteParams();
-  })
-  .catch((err) => toast("初始化失败：" + err.message, true));
+  } catch (err) {
+    toast("初始化失败：" + err.message, true);
+  }
+})();

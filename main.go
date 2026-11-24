@@ -26,6 +26,9 @@ import (
 //go:embed web
 var webFS embed.FS
 
+// Version 是系统版本号，打包镜像与页面展示均以此为准。
+const Version = "1.0.1"
+
 const maxUploadBytes = 10 << 20 // 10 MB
 
 var allowedImageExt = map[string]string{
@@ -54,7 +57,12 @@ func decodeJSON(r *http.Request, v any) error {
 }
 
 func (s *server) health(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "time": now()})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "time": now(), "version": Version})
+}
+
+// version 返回系统版本号（无需登录，供登录页与主页展示）。
+func (s *server) version(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"version": Version})
 }
 
 // ---------- 账号 / 会话 ----------
@@ -155,7 +163,7 @@ func (s *server) authLogout(w http.ResponseWriter, r *http.Request) {
 // isPublic 判断无需登录即可访问的路径：健康检查、鉴权接口、静态页面与上传图片。
 func (s *server) isPublic(r *http.Request) bool {
 	p := r.URL.Path
-	if p == "/api/health" {
+	if p == "/api/health" || p == "/api/version" {
 		return true
 	}
 	if strings.HasPrefix(p, "/api/auth/") {
@@ -608,6 +616,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.health)
+	mux.HandleFunc("GET /api/version", s.version)
 	mux.HandleFunc("GET /api/auth/status", s.authStatus)
 	mux.HandleFunc("POST /api/auth/register", s.authRegister)
 	mux.HandleFunc("POST /api/auth/login", s.authLogin)

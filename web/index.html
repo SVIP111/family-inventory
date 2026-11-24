@@ -36,6 +36,7 @@
           <button type="button" data-menu="import" role="menuitem">⬆ 批量导入</button>
           <button type="button" data-menu="select" role="menuitem">☑ 批量管理</button>
           <button type="button" data-menu="tags" role="menuitem">🏷️ 标签管理</button>
+          <button type="button" data-menu="about" role="menuitem">ℹ️ 关于</button>
           <button type="button" data-menu="logout" role="menuitem" class="danger">退出登录</button>
         </div>
       </div>
@@ -303,6 +304,25 @@
     </div>
   </div>
 
+  <!-- 关于弹窗 -->
+  <div id="about-modal" class="modal-backdrop hidden">
+    <div class="modal modal-about">
+      <div class="modal-head">
+        <h2>关于</h2>
+        <button class="close" data-close="about-modal" type="button">×</button>
+      </div>
+      <div class="about-body">
+        <div class="about-icon">📦</div>
+        <h3>家庭物资管理</h3>
+        <p class="about-version" id="about-version">版本 —</p>
+        <p class="about-desc">Go 静态后端 + 内嵌原生 HTML/JS 前端的单容器家庭物品台账工具，数据以 JSON 文件与图片持久化，适合家庭内网使用。</p>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn ghost" data-close="about-modal">关闭</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 位置管理独立页面 -->
   <section id="loc-page" class="loc-page hidden app-only">
     <div class="loc-page-head">
@@ -326,7 +346,7 @@
     <div class="loc-page-head">
       <div>
         <h2>仪表盘</h2>
-        <span class="sub">按位置、标签汇总物品分布，点击图例可在保留其他筛选条件的同时叠加筛选</span>
+        <span class="sub">按位置、标签汇总物品分布，点击图例仅按该维度筛选，并清空另一维度条件与搜索词</span>
       </div>
     </div>
     <div class="dash-grid">
