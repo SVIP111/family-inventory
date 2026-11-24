@@ -864,7 +864,6 @@ async function openDashPage() {
   await loadSummary();
 }
 $("btn-back-gallery").addEventListener("click", closeLocPage);
-$("btn-back-gallery-dash").addEventListener("click", closeLocPage);
 $("btn-home").addEventListener("click", closeLocPage);
 $("btn-dashboard").addEventListener("click", openDashPage);
 
@@ -1269,32 +1268,73 @@ function renderPie(chartEl, legendEl, segs, kind) {
   }).join("");
 }
 
+// 通用横向柱状图：rows = [{label, sub, value, dataId?}]
+function renderBarChart(container, rows, opts) {
+  if (!rows.length) {
+    container.innerHTML = `<div class="empty-sm">暂无数据</div>`;
+    return;
+  }
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  container.innerHTML = rows.map((r, i) => {
+    const pct = ((r.value / max) * 100).toFixed(1);
+    const color = PIE_COLORS[i % PIE_COLORS.length];
+    const attrs = r.dataId
+      ? `data-detail-id="${r.dataId}"`
+      : `data-legend="${opts.kind}" data-legend-name="${esc(r.label)}"`;
+    return `<div class="bar-row" ${attrs}>
+      <div class="bar-meta">
+        <span class="bar-label">${esc(r.label)}</span>
+        ${r.sub ? `<span class="bar-sub">${esc(r.sub)}</span>` : ""}
+        <span class="bar-value">${r.value}${opts.unit || ""}</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+    </div>`;
+  }).join("");
+}
+
 function renderDashboard() {
   renderPie($("dash-loc-chart"), $("dash-loc-legend"), summaryData.byLocation || [], "loc");
   renderPie($("dash-tag-chart"), $("dash-tag-legend"), summaryData.byTag || [], "tag");
+  renderBarChart(
+    $("dash-loc-bars"),
+    (summaryData.byLocation || []).map((s) => ({ label: s.name, value: s.count, sub: `${s.quantity} 件库存` })),
+    { kind: "loc", unit: " 件" }
+  );
+  renderBarChart(
+    $("dash-top-bars"),
+    (summaryData.topItems || []).map((t) => ({ label: t.name, sub: t.location, value: t.quantity, dataId: t.id })),
+    { unit: "" }
+  );
 }
 
+// 图例 / 柱状图点击：只更新对应维度（位置或标签），保留另一维度与关键字搜索；
+// 再次点击当前已生效的分片则取消该维度筛选。
 function applyDashboardFilter(kind, name) {
-  if (kind === "loc") {
-    if (name === "未分配位置") {
-      state.filter.location = "";
-      $("location-filter").value = "";
-    } else {
+  const isLoc = kind === "loc";
+  const emptyLabel = isLoc ? "未分配位置" : "无标签";
+  const filterKey = isLoc ? "location" : "tag";
+  const inputEl = $(isLoc ? "location-filter" : "tag-filter");
+
+  let next = "";
+  if (name !== emptyLabel) {
+    if (isLoc) {
       const loc = findByPath(name);
-      state.filter.location = loc ? loc.id : name;
-      $("location-filter").value = loc ? pathOf(loc.id) : name;
-    }
-    syncClearBtn("location-filter");
-  } else {
-    if (name === "无标签") {
-      state.filter.tag = "";
-      $("tag-filter").value = "";
+      next = loc ? loc.id : name;
     } else {
-      state.filter.tag = name;
-      $("tag-filter").value = name;
+      next = name;
     }
-    syncClearBtn("tag-filter");
   }
+
+  if (next !== "" && state.filter[filterKey] === next) {
+    state.filter[filterKey] = "";
+    inputEl.value = "";
+  } else {
+    state.filter[filterKey] = next;
+    inputEl.value = next
+      ? (isLoc && findByPath(next) ? pathOf(next) : next)
+      : "";
+  }
+  syncClearBtn(isLoc ? "location-filter" : "tag-filter");
   showPage("gallery");
   loadItems();
 }
@@ -1306,6 +1346,14 @@ $("dash-loc-legend").addEventListener("click", (e) => {
 $("dash-tag-legend").addEventListener("click", (e) => {
   const item = e.target.closest("[data-legend]");
   if (item) applyDashboardFilter(item.dataset.legend, item.dataset.legendName);
+});
+$("dash-loc-bars").addEventListener("click", (e) => {
+  const row = e.target.closest("[data-legend]");
+  if (row) applyDashboardFilter(row.dataset.legend, row.dataset.legendName);
+});
+$("dash-top-bars").addEventListener("click", (e) => {
+  const row = e.target.closest("[data-detail-id]");
+  if (row) openDetail(row.dataset.detailId);
 });
 
 // 卡片操作（事件委托）：按钮走对应动作，点击卡片其余区域打开详情

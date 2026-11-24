@@ -326,24 +326,31 @@
     <div class="loc-page-head">
       <div>
         <h2>仪表盘</h2>
-        <span class="sub">按位置、标签汇总物品分布，点击图例可筛选列表</span>
+        <span class="sub">按位置、标签汇总物品分布，点击图例可在保留其他筛选条件的同时叠加筛选</span>
       </div>
-      <button type="button" id="btn-back-gallery-dash" class="btn ghost">← 返回物品列表</button>
     </div>
     <div class="dash-grid">
       <div class="dash-card">
-        <h3>按位置</h3>
+        <h3>按位置（饼图）</h3>
         <div class="dash-body">
           <div id="dash-loc-chart" class="pie-wrap"></div>
           <ul id="dash-loc-legend" class="legend"></ul>
         </div>
       </div>
       <div class="dash-card">
-        <h3>按标签</h3>
+        <h3>按标签（饼图）</h3>
         <div class="dash-body">
           <div id="dash-tag-chart" class="pie-wrap"></div>
           <ul id="dash-tag-legend" class="legend"></ul>
         </div>
+      </div>
+      <div class="dash-card dash-card-wide">
+        <h3>各位置物品件数（柱状图）</h3>
+        <div id="dash-loc-bars" class="bar-wrap"></div>
+      </div>
+      <div class="dash-card dash-card-wide">
+        <h3>物品数量 Top 10（柱状图）</h3>
+        <div id="dash-top-bars" class="bar-wrap"></div>
       </div>
     </div>
   </section>

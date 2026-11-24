@@ -434,6 +434,18 @@ body:not(.select-mode) .select-check { display: none; }
 .legend-pct { color: var(--muted); font-size: 12px; }
 .legend-count { color: var(--muted); font-size: 12px; min-width: 52px; text-align: right; }
 
+/* 仪表盘柱状图 */
+.dash-card-wide { grid-column: 1 / -1; }
+.bar-wrap { display: flex; flex-direction: column; gap: 12px; }
+.bar-row { cursor: pointer; border-radius: 10px; padding: 4px 6px; }
+.bar-row:hover { background: #f3f4f6; }
+.bar-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.bar-label { flex: 1; font-size: 13px; font-weight: 500; word-break: break-word; }
+.bar-sub { color: var(--muted); font-size: 12px; }
+.bar-value { color: var(--muted); font-size: 12px; min-width: 48px; text-align: right; }
+.bar-track { height: 10px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 999px; min-width: 2px; }
+
 /* 物品详情弹窗 */
 .modal-detail { max-width: 560px; }
 .detail-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; }

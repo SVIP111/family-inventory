@@ -487,8 +487,24 @@ type SummarySegment struct {
 	Quantity int    `json:"quantity"`
 }
 
-// Summary 按位置、按标签汇总全部物品；无位置归入「未分配位置」，无标签归入「无标签」。
-func (s *Store) Summary() map[string][]SummarySegment {
+// TopItem 是数量排行中的一件物品。
+type TopItem struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Quantity int    `json:"quantity"`
+	Location string `json:"location"`
+}
+
+// SummaryResult 是仪表盘汇总数据：位置 / 标签分布 + 数量 Top 物品。
+type SummaryResult struct {
+	ByLocation []SummarySegment `json:"byLocation"`
+	ByTag      []SummarySegment `json:"byTag"`
+	TopItems   []TopItem        `json:"topItems"`
+}
+
+// Summary 按位置、按标签汇总全部物品，并给出数量最高的前 10 件物品；
+// 无位置归入「未分配位置」，无标签归入「无标签」。
+func (s *Store) Summary() SummaryResult {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -504,6 +520,7 @@ func (s *Store) Summary() map[string][]SummarySegment {
 		seg.Quantity += qty
 	}
 
+	var topPool []TopItem
 	for _, it := range s.db.Items {
 		locName := s.locationPathLocked(it.LocationID)
 		if locName == "" {
@@ -517,6 +534,12 @@ func (s *Store) Summary() map[string][]SummarySegment {
 				add(tagMap, t, it.Quantity)
 			}
 		}
+		topPool = append(topPool, TopItem{
+			ID:       it.ID,
+			Name:     it.Name,
+			Quantity: it.Quantity,
+			Location: locName,
+		})
 	}
 
 	toSlice := func(m map[string]*SummarySegment) []SummarySegment {
@@ -533,9 +556,20 @@ func (s *Store) Summary() map[string][]SummarySegment {
 		return out
 	}
 
-	return map[string][]SummarySegment{
-		"byLocation": toSlice(locMap),
-		"byTag":      toSlice(tagMap),
+	sort.Slice(topPool, func(i, j int) bool {
+		if topPool[i].Quantity != topPool[j].Quantity {
+			return topPool[i].Quantity > topPool[j].Quantity
+		}
+		return topPool[i].Name < topPool[j].Name
+	})
+	if len(topPool) > 10 {
+		topPool = topPool[:10]
+	}
+
+	return SummaryResult{
+		ByLocation: toSlice(locMap),
+		ByTag:      toSlice(tagMap),
+		TopItems:   topPool,
 	}
 }
 
