@@ -436,6 +436,109 @@ func (s *Store) AllTags() []string {
 	return out
 }
 
+// RenameTag 把所有物品上的旧标签改名为新标签；新标签与既有标签同名时自动合并去重。
+// 未找到旧标签时返回 ErrNotFound。
+func (s *Store) RenameTag(oldName, newName string) error {
+	oldName = strings.TrimSpace(oldName)
+	newName = strings.TrimSpace(newName)
+	if oldName == "" {
+		return fmt.Errorf("原标签不能为空")
+	}
+	if newName == "" {
+		return fmt.Errorf("新标签不能为空")
+	}
+	if strings.EqualFold(oldName, newName) {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	changed := false
+	for i := range s.db.Items {
+		tags := s.db.Items[i].Tags
+		replaced := false
+		seen := map[string]bool{}
+		out := make([]string, 0, len(tags))
+		for _, t := range tags {
+			if strings.EqualFold(t, oldName) {
+				replaced = true
+				t = newName
+			}
+			key := strings.ToLower(t)
+			if !seen[key] {
+				seen[key] = true
+				out = append(out, t)
+			}
+		}
+		if replaced {
+			s.db.Items[i].Tags = out
+			changed = true
+		}
+	}
+	if !changed {
+		return ErrNotFound
+	}
+	return s.save()
+}
+
+// SummarySegment 是汇总饼图的一个分片：Count 为物品件数，Quantity 为数量合计。
+type SummarySegment struct {
+	Name     string `json:"name"`
+	Count    int    `json:"count"`
+	Quantity int    `json:"quantity"`
+}
+
+// Summary 按位置、按标签汇总全部物品；无位置归入「未分配位置」，无标签归入「无标签」。
+func (s *Store) Summary() map[string][]SummarySegment {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	locMap := map[string]*SummarySegment{}
+	tagMap := map[string]*SummarySegment{}
+	add := func(m map[string]*SummarySegment, name string, qty int) {
+		seg, ok := m[name]
+		if !ok {
+			seg = &SummarySegment{Name: name}
+			m[name] = seg
+		}
+		seg.Count++
+		seg.Quantity += qty
+	}
+
+	for _, it := range s.db.Items {
+		locName := s.locationPathLocked(it.LocationID)
+		if locName == "" {
+			locName = "未分配位置"
+		}
+		add(locMap, locName, it.Quantity)
+		if len(it.Tags) == 0 {
+			add(tagMap, "无标签", it.Quantity)
+		} else {
+			for _, t := range it.Tags {
+				add(tagMap, t, it.Quantity)
+			}
+		}
+	}
+
+	toSlice := func(m map[string]*SummarySegment) []SummarySegment {
+		out := make([]SummarySegment, 0, len(m))
+		for _, seg := range m {
+			out = append(out, *seg)
+		}
+		sort.Slice(out, func(i, j int) bool {
+			if out[i].Count != out[j].Count {
+				return out[i].Count > out[j].Count
+			}
+			return out[i].Name < out[j].Name
+		})
+		return out
+	}
+
+	return map[string][]SummarySegment{
+		"byLocation": toSlice(locMap),
+		"byTag":      toSlice(tagMap),
+	}
+}
+
 func (s *Store) GetItem(id string) (Item, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

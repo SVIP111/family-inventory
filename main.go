@@ -190,6 +190,31 @@ func (s *server) stats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.store.Stats())
 }
 
+func (s *server) summary(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.store.Summary())
+}
+
+// renameTag 重命名标签：同步更新到所有使用该标签的物品。
+func (s *server) renameTag(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Old string `json:"old"`
+		New string `json:"new"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "请求体不是合法 JSON"})
+		return
+	}
+	err := s.store.RenameTag(body.Old, body.New)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "标签不存在"})
+	case err != nil:
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "tags": s.store.AllTags()})
+	}
+}
+
 // ---------- 位置 ----------
 
 func (s *server) listLocations(w http.ResponseWriter, r *http.Request) {
@@ -588,6 +613,8 @@ func main() {
 	mux.HandleFunc("POST /api/auth/login", s.authLogin)
 	mux.HandleFunc("POST /api/auth/logout", s.authLogout)
 	mux.HandleFunc("GET /api/stats", s.stats)
+	mux.HandleFunc("GET /api/summary", s.summary)
+	mux.HandleFunc("PUT /api/tags/rename", s.renameTag)
 	mux.HandleFunc("GET /api/locations", s.listLocations)
 	mux.HandleFunc("POST /api/locations", s.createLocation)
 	mux.HandleFunc("POST /api/locations/{id}/image", s.uploadLocationImage)

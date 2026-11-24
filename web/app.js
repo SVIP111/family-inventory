@@ -17,6 +17,11 @@ const state = {
   selected: new Set(),
 };
 
+// 物品表单当前已选标签（与输入框文本并存，提交时合并去重）
+let formTags = [];
+// 仪表盘汇总数据
+let summaryData = null;
+
 const $ = (id) => document.getElementById(id);
 
 // ---------- 登录态 ----------
@@ -104,10 +109,8 @@ function showAuthScreen(registered) {
 function showApp() {
   document.body.classList.add("authed");
   $("auth-screen").classList.add("hidden");
-  const chip = $("user-chip");
   if (authUser) {
-    chip.textContent = "👤 " + authUser;
-    chip.classList.remove("hidden");
+    $("user-chip-name").textContent = "👤 " + authUser;
   }
 }
 
@@ -137,6 +140,7 @@ async function bootAuth() {
 async function logout() {
   try { await api("POST", "/api/auth/logout"); } catch (_) {}
   clearAuth();
+  $("user-chip-name").textContent = "👤 用户";
   showAuthScreen(true);
 }
 
@@ -152,6 +156,7 @@ async function loadLocations() {
 async function loadTags() {
   state.tags = await api("GET", "/api/tags");
   populateTagOptions();
+  renderTagPicker();
 }
 
 async function loadItems() {
@@ -260,6 +265,54 @@ function populateTagOptions() {
   list.innerHTML = state.tags
     .map((t) => `<option value="${esc(t)}">`)
     .join("");
+}
+
+// ---------- 物品表单标签快捷点选 ----------
+
+// 按逗号 / 顿号 / 分号 / 空白切分标签。
+function splitTags(raw) {
+  return String(raw ?? "")
+    .split(/[,，、;；\s]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+// 忽略大小写去重，保留先出现的写法。
+function dedupeTags(list) {
+  const seen = new Set();
+  const out = [];
+  for (const t of list) {
+    const k = t.toLowerCase();
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+function renderTagPicker() {
+  const wrap = $("tag-chip-wrap");
+  if (!wrap) return;
+  if (!state.tags.length) {
+    wrap.innerHTML = "";
+    return;
+  }
+  wrap.innerHTML = state.tags.map((t) => {
+    const active = formTags.some((x) => x.toLowerCase() === t.toLowerCase());
+    return `<button type="button" class="tag-chip${active ? " active" : ""}" data-tag-pick="${esc(t)}">${esc(t)}</button>`;
+  }).join("");
+}
+
+// 把输入框里尚未回车的新标签并入已选标签。
+function flushTypedTags() {
+  const input = $("item-tags");
+  const typed = splitTags(input.value);
+  if (typed.length) {
+    formTags = dedupeTags([...formTags, ...typed]);
+  }
+  input.value = "";
+  renderTagPicker();
 }
 
 // ---------- 位置管理树渲染 ----------
@@ -423,6 +476,8 @@ function resetItemForm() {
   $("item-form").reset();
   $("item-form").quantity.value = "1";
   $("item-location-id").value = "";
+  formTags = [];
+  renderTagPicker();
   const preview = $("image-preview");
   preview.classList.add("hidden");
   preview.removeAttribute("src");
@@ -445,7 +500,9 @@ function openEditItem(id) {
   $("item-location-id").value = it.locationId || "";
   $("item-form").quantity.value = it.quantity;
   $("item-form").description.value = it.description || "";
-  $("item-form").tags.value = (it.tags || []).join(", ");
+  formTags = dedupeTags(it.tags || []);
+  $("item-tags").value = "";
+  renderTagPicker();
   $("item-form").barcode.value = it.barcode || "";
   const preview = $("image-preview");
   if (it.imageFile) {
@@ -729,10 +786,8 @@ $("view-grid").addEventListener("click", () => { state.view = "grid"; renderGall
 $("view-list").addEventListener("click", () => { state.view = "list"; renderGallery(); });
 
 $("btn-add").addEventListener("click", openAddItem);
-$("btn-logout").addEventListener("click", logout);
 
 // 批量管理模式
-$("btn-select-mode").addEventListener("click", () => setSelectMode(true));
 $("btn-exit-select").addEventListener("click", () => setSelectMode(false));
 $("bulk-select-all").addEventListener("change", (e) => {
   if (e.target.checked) state.items.forEach((x) => state.selected.add(x.id));
@@ -788,24 +843,30 @@ $("detail-edit").addEventListener("click", () => {
 });
 $("detail-qr").addEventListener("click", () => { if (detailId) openItemQR(detailId); });
 
-// 位置管理独立页面切换
+// 页面切换：gallery 物品列表 / loc 位置管理 / dash 仪表盘
+function showPage(page) {
+  state.page = page;
+  $("loc-page").classList.toggle("hidden", page !== "loc");
+  $("dash-page").classList.toggle("hidden", page !== "dash");
+  $("toolbar").classList.toggle("hidden", page !== "gallery");
+  $("gallery").classList.toggle("hidden", page !== "gallery");
+  $("bulk-bar").classList.toggle("hidden", page !== "gallery" || !state.selectMode);
+}
 function openLocPage() {
-  state.page = "loc";
   renderLocationList();
-  $("loc-page").classList.remove("hidden");
-  $("toolbar").classList.add("hidden");
-  $("gallery").classList.add("hidden");
-  $("bulk-bar").classList.add("hidden");
+  showPage("loc");
 }
 function closeLocPage() {
-  state.page = "gallery";
-  $("loc-page").classList.add("hidden");
-  $("toolbar").classList.remove("hidden");
-  $("gallery").classList.remove("hidden");
-  $("bulk-bar").classList.toggle("hidden", !state.selectMode);
+  showPage("gallery");
 }
-$("btn-manage-locations").addEventListener("click", openLocPage);
+async function openDashPage() {
+  showPage("dash");
+  await loadSummary();
+}
 $("btn-back-gallery").addEventListener("click", closeLocPage);
+$("btn-back-gallery-dash").addEventListener("click", closeLocPage);
+$("btn-home").addEventListener("click", closeLocPage);
+$("btn-dashboard").addEventListener("click", openDashPage);
 
 // 筛选位置的布局图预览
 $("btn-view-loc-image").addEventListener("click", () => {
@@ -828,6 +889,24 @@ $("btn-scan").addEventListener("click", () => startScan((v) => {
 $("btn-scan-search").addEventListener("click", () => startScan(handleScanValue));
 
 bindLocationInput("item-location", "item-location-id");
+
+// 标签快捷点选：点击既有标签 chip 切换选中；输入框回车 / 逗号加入新标签
+$("tag-chip-wrap").addEventListener("click", (e) => {
+  const chip = e.target.closest("[data-tag-pick]");
+  if (!chip) return;
+  const t = chip.dataset.tagPick;
+  const idx = formTags.findIndex((x) => x.toLowerCase() === t.toLowerCase());
+  if (idx >= 0) formTags.splice(idx, 1);
+  else formTags.push(t);
+  renderTagPicker();
+});
+$("item-tags").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === ",") {
+    e.preventDefault();
+    flushTypedTags();
+  }
+});
+$("item-tags").addEventListener("blur", flushTypedTags);
 
 // 图片预览
 $("item-image").addEventListener("change", (e) => {
@@ -895,12 +974,12 @@ function showImportResult(res) {
   box.innerHTML = html;
 }
 
-$("btn-import").addEventListener("click", () => {
+function openImportModal() {
   $("import-file").value = "";
   $("import-file-label").textContent = "选择 CSV 文件";
   $("import-result").classList.add("hidden");
   openModal("import-modal");
-});
+}
 
 $("btn-template").addEventListener("click", downloadTemplate);
 
@@ -932,8 +1011,10 @@ $("import-form").addEventListener("submit", async (e) => {
 // 物品提交
 $("item-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  flushTypedTags();
   const form = e.target;
   const fd = new FormData(form);
+  fd.set("tags", formTags.join(", "));
   const submitBtn = $("item-submit");
   submitBtn.disabled = true;
   try {
@@ -1016,6 +1097,215 @@ $("location-list").addEventListener("click", async (e) => {
   } catch (err) {
     toast(err.message, true);
   }
+});
+
+// ---------- 用户下拉菜单 ----------
+
+const userMenuDrop = $("user-menu-drop");
+
+function toggleUserMenu(force) {
+  const open = force !== undefined ? force : userMenuDrop.classList.contains("hidden");
+  userMenuDrop.classList.toggle("hidden", !open);
+  $("user-chip").setAttribute("aria-expanded", String(open));
+}
+
+$("user-chip").addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleUserMenu();
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".user-menu")) toggleUserMenu(false);
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") toggleUserMenu(false);
+});
+
+document.querySelectorAll("[data-menu]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    toggleUserMenu(false);
+    const action = btn.dataset.menu;
+    if (action === "locations") openLocPage();
+    else if (action === "import") openImportModal();
+    else if (action === "select") { showPage("gallery"); setSelectMode(true); }
+    else if (action === "tags") openTagManager();
+    else if (action === "logout") logout();
+  });
+});
+
+// ---------- 标签管理 ----------
+
+async function openTagManager() {
+  openModal("tag-modal");
+  await renderTagManager();
+}
+
+async function renderTagManager() {
+  const list = $("tag-manage-list");
+  try {
+    summaryData = await api("GET", "/api/summary");
+  } catch (err) {
+    toast(err.message, true);
+    return;
+  }
+  const byTag = (summaryData.byTag || []).filter((s) => s.name !== "无标签");
+  if (!byTag.length) {
+    list.innerHTML = `<li class="tm-empty">暂无标签，可在新增物品时填写。</li>`;
+    return;
+  }
+  list.innerHTML = byTag.map((seg) => `
+    <li class="tm-row" data-tag-row="${esc(seg.name)}">
+      <span class="tm-name">${esc(seg.name)}</span>
+      <span class="tm-count">${seg.count} 件</span>
+      <button type="button" class="btn ghost small" data-tm-rename="${esc(seg.name)}">改名</button>
+    </li>`).join("");
+}
+
+$("tag-manage-list").addEventListener("click", (e) => {
+  const renameBtn = e.target.closest("[data-tm-rename]");
+  if (!renameBtn) return;
+  const oldName = renameBtn.dataset.tmRename;
+  const row = renameBtn.closest("[data-tag-row]");
+  row.innerHTML = `
+    <input type="text" class="tm-input" value="${esc(oldName)}" maxlength="50" />
+    <button type="button" class="btn primary small" data-tm-save>保存</button>
+    <button type="button" class="btn ghost small" data-tm-cancel>取消</button>`;
+  const input = row.querySelector(".tm-input");
+  input.focus();
+  input.select();
+
+  const cancel = () => renderTagManager();
+  row.querySelector("[data-tm-cancel]").addEventListener("click", cancel);
+
+  const save = async () => {
+    const newName = input.value.trim();
+    if (!newName) { toast("标签名称不能为空", true); return; }
+    if (newName === oldName) { cancel(); return; }
+    try {
+      const res = await api("PUT", "/api/tags/rename", { old: oldName, new: newName });
+      state.tags = res.tags;
+      populateTagOptions();
+      renderTagPicker();
+      toast("标签已改名");
+      await renderTagManager();
+      await refreshAll();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  };
+  row.querySelector("[data-tm-save]").addEventListener("click", save);
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") save();
+    if (ev.key === "Escape") cancel();
+  });
+});
+
+// ---------- 仪表盘 ----------
+
+async function loadSummary() {
+  try {
+    summaryData = await api("GET", "/api/summary");
+  } catch (err) {
+    toast(err.message, true);
+    return;
+  }
+  renderDashboard();
+}
+
+const PIE_COLORS = ["#2563eb", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#64748b", "#84cc16", "#f97316"];
+
+function polar(cx, cy, r, a) {
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+}
+
+function donutSlice(cx, cy, rOut, rIn, a0, a1) {
+  const [x0, y0] = polar(cx, cy, rOut, a0);
+  const [x1, y1] = polar(cx, cy, rOut, a1);
+  const [xi1, yi1] = polar(cx, cy, rIn, a1);
+  const [xi0, yi0] = polar(cx, cy, rIn, a0);
+  const large = a1 - a0 > Math.PI ? 1 : 0;
+  return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${rOut} ${rOut} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} L ${xi1.toFixed(2)} ${yi1.toFixed(2)} A ${rIn} ${rIn} 0 ${large} 0 ${xi0.toFixed(2)} ${yi0.toFixed(2)} Z`;
+}
+
+function renderPie(chartEl, legendEl, segs, kind) {
+  const total = segs.reduce((a, s) => a + s.count, 0);
+  if (!total) {
+    chartEl.innerHTML = `<div class="empty-sm">暂无数据</div>`;
+    legendEl.innerHTML = "";
+    return;
+  }
+  const size = 200, cx = 100, cy = 100, rOut = 74, rIn = 44;
+  const midR = (rOut + rIn) / 2;
+  let angle = -Math.PI / 2;
+  const paths = segs.map((seg, i) => {
+    const frac = seg.count / total;
+    const a1 = angle + frac * 2 * Math.PI;
+    const color = PIE_COLORS[i % PIE_COLORS.length];
+    let d;
+    if (frac >= 0.9999) {
+      d = `<circle cx="${cx}" cy="${cy}" r="${midR}" fill="none" stroke="${color}" stroke-width="${rOut - rIn}"/>`;
+    } else {
+      d = `<path d="${donutSlice(cx, cy, rOut, rIn, angle, a1)}" fill="${color}"/>`;
+    }
+    angle = a1;
+    return d;
+  });
+  chartEl.innerHTML = `
+    <svg viewBox="0 0 ${size} ${size}" class="pie-svg" role="img">
+      ${paths.join("")}
+      <text x="${cx}" y="${cy - 2}" text-anchor="middle" class="pie-total">${total}</text>
+      <text x="${cx}" y="${cy + 16}" text-anchor="middle" class="pie-total-sub">件</text>
+    </svg>`;
+  legendEl.innerHTML = segs.map((seg, i) => {
+    const color = PIE_COLORS[i % PIE_COLORS.length];
+    const pct = ((seg.count / total) * 100).toFixed(1);
+    return `<li class="legend-item" data-legend="${kind}" data-legend-name="${esc(seg.name)}">
+      <span class="legend-dot" style="background:${color}"></span>
+      <span class="legend-name">${esc(seg.name)}</span>
+      <span class="legend-pct">${pct}%</span>
+      <span class="legend-count">${seg.count} 件</span>
+    </li>`;
+  }).join("");
+}
+
+function renderDashboard() {
+  renderPie($("dash-loc-chart"), $("dash-loc-legend"), summaryData.byLocation || [], "loc");
+  renderPie($("dash-tag-chart"), $("dash-tag-legend"), summaryData.byTag || [], "tag");
+}
+
+function applyDashboardFilter(kind, name) {
+  if (kind === "loc") {
+    if (name === "未分配位置") {
+      state.filter.location = "";
+      $("location-filter").value = "";
+    } else {
+      const loc = findByPath(name);
+      state.filter.location = loc ? loc.id : name;
+      $("location-filter").value = loc ? pathOf(loc.id) : name;
+    }
+    syncClearBtn("location-filter");
+  } else {
+    if (name === "无标签") {
+      state.filter.tag = "";
+      $("tag-filter").value = "";
+    } else {
+      state.filter.tag = name;
+      $("tag-filter").value = name;
+    }
+    syncClearBtn("tag-filter");
+  }
+  showPage("gallery");
+  loadItems();
+}
+
+$("dash-loc-legend").addEventListener("click", (e) => {
+  const item = e.target.closest("[data-legend]");
+  if (item) applyDashboardFilter(item.dataset.legend, item.dataset.legendName);
+});
+$("dash-tag-legend").addEventListener("click", (e) => {
+  const item = e.target.closest("[data-legend]");
+  if (item) applyDashboardFilter(item.dataset.legend, item.dataset.legendName);
 });
 
 // 卡片操作（事件委托）：按钮走对应动作，点击卡片其余区域打开详情

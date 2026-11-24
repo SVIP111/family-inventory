@@ -24,12 +24,21 @@
         </div>
         <button type="button" class="btn ghost" id="btn-scan-search" title="扫描条码 / 二维码搜索">📷 扫码</button>
       </div>
-      <button id="btn-manage-locations" class="btn ghost" type="button">位置管理</button>
-      <button id="btn-import" class="btn ghost" type="button">⬆ 批量导入</button>
-      <button id="btn-select-mode" class="btn ghost" type="button">☑ 批量管理</button>
-      <span id="user-chip" class="user-chip hidden"></span>
-      <button id="btn-logout" class="btn ghost" type="button">退出登录</button>
+      <button id="btn-home" class="btn ghost" type="button" title="返回物品列表">🏠 物品列表</button>
+      <button id="btn-dashboard" class="btn ghost" type="button" title="查看汇总仪表盘">📊 仪表盘</button>
       <button id="btn-add" class="btn primary" type="button">＋ 新增物品</button>
+      <div class="user-menu">
+        <button id="user-chip" class="user-chip" type="button" aria-haspopup="true" aria-expanded="false">
+          <span id="user-chip-name">👤 用户</span><span class="caret">▾</span>
+        </button>
+        <div id="user-menu-drop" class="user-drop hidden" role="menu">
+          <button type="button" data-menu="locations" role="menuitem">📍 位置管理</button>
+          <button type="button" data-menu="import" role="menuitem">⬆ 批量导入</button>
+          <button type="button" data-menu="select" role="menuitem">☑ 批量管理</button>
+          <button type="button" data-menu="tags" role="menuitem">🏷️ 标签管理</button>
+          <button type="button" data-menu="logout" role="menuitem" class="danger">退出登录</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -113,7 +122,8 @@
           </label>
           <label class="field">
             <span>标签</span>
-            <input name="tags" type="text" maxlength="200" placeholder="逗号分隔，如：数码, 备用, 户外" autocomplete="off" />
+            <div id="tag-chip-wrap" class="tag-chip-wrap"></div>
+            <input name="tags" id="item-tags" type="text" maxlength="200" placeholder="输入新标签后回车，或点击上方既有标签" autocomplete="off" list="tag-options" />
           </label>
           <label class="field">
             <span>条码 / 编号</span>
@@ -176,6 +186,23 @@
           <button type="submit" class="btn primary" id="import-submit">开始导入</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- 标签管理弹窗 -->
+  <div id="tag-modal" class="modal-backdrop hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>标签管理</h2>
+        <button class="close" data-close="tag-modal" type="button">×</button>
+      </div>
+      <div class="tag-body">
+        <p class="scan-hint">改名后会同步更新到所有使用该标签的物品；点击标签旁的「改名」即可修改名称。</p>
+        <ul id="tag-manage-list" class="tag-manage-list"></ul>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn ghost" data-close="tag-modal">关闭</button>
+      </div>
     </div>
   </div>
 
@@ -292,6 +319,33 @@
     </form>
     <input type="file" id="loc-image-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
     <ul id="location-list" class="location-list"></ul>
+  </section>
+
+  <!-- 仪表盘独立页面 -->
+  <section id="dash-page" class="loc-page hidden app-only">
+    <div class="loc-page-head">
+      <div>
+        <h2>仪表盘</h2>
+        <span class="sub">按位置、标签汇总物品分布，点击图例可筛选列表</span>
+      </div>
+      <button type="button" id="btn-back-gallery-dash" class="btn ghost">← 返回物品列表</button>
+    </div>
+    <div class="dash-grid">
+      <div class="dash-card">
+        <h3>按位置</h3>
+        <div class="dash-body">
+          <div id="dash-loc-chart" class="pie-wrap"></div>
+          <ul id="dash-loc-legend" class="legend"></ul>
+        </div>
+      </div>
+      <div class="dash-card">
+        <h3>按标签</h3>
+        <div class="dash-body">
+          <div id="dash-tag-chart" class="pie-wrap"></div>
+          <ul id="dash-tag-legend" class="legend"></ul>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- 共享补全选项 -->
